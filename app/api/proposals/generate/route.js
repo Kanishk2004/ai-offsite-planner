@@ -25,11 +25,7 @@ import OpenAI from 'openai';
 import { auth } from '@clerk/nextjs/server';
 import { connectDB, Proposal, VenueCache } from '@/utils/db';
 
-// ─── OpenAI client ────────────────────────────────────────────────────────────
-
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-// ─── Stage 1: Intent extraction ───────────────────────────────────────────────
 
 async function extractIntent(prompt, destinationHint) {
 	const response = await openai.chat.completions.create({
@@ -73,8 +69,6 @@ If any field cannot be inferred, use null.`,
 		throw new Error('Intent extraction failed: OpenAI returned invalid JSON.');
 	}
 }
-
-// ─── Stage 2: Venue discovery ─────────────────────────────────────────────────
 
 async function fetchVenuesForQuery(query) {
 	const SEVEN_DAYS_AGO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -153,8 +147,6 @@ async function discoverVenues(googleSearchQueries) {
 	return venues;
 }
 
-// ─── Stage 3: Proposal generation ────────────────────────────────────────────
-
 async function generateProposal(intent, venues) {
 	const venueList = venues.map((v) => ({
 		placeId: v.id || v.place_id,
@@ -171,7 +163,13 @@ async function generateProposal(intent, venues) {
 			{
 				role: 'system',
 				content: `You are an expert corporate event planner. Given event requirements and a list of real venues,
-generate a structured proposal. Return ONLY valid JSON with no prose, no markdown fences. Schema:
+generate a structured proposal. Return ONLY valid JSON with no prose, no markdown fences.
+Be accurate and realistic in your recommendations, using the provided venue list as the basis for your recommendedVenue.
+Always include a recommendedVenue from the list with a clear rationale, even if it's not a perfect match.
+Currency in costEstimate should match the intent's currency.
+agendaSkeleton can have more days if needed, but at least cover the main event day.
+
+Schema:
 {
   "recommendedVenue": {
     "placeId": string,
@@ -181,7 +179,7 @@ generate a structured proposal. Return ONLY valid JSON with no prose, no markdow
   "alternativeVenues": [{ "placeId": string, "name": string, "reason": string }],
   "agendaSkeleton": {
     "day1": string[],
-    "day2": string[]
+    "day2": string[], // add more days as needed
   },
   "cateringNotes": string,
   "logisticsTips": string[],
@@ -213,8 +211,6 @@ generate a structured proposal. Return ONLY valid JSON with no prose, no markdow
 		);
 	}
 }
-
-// ─── Main handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req) {
 	// 1. Parse request body
@@ -266,9 +262,9 @@ export async function POST(req) {
 	const venues = await discoverVenues(intent.googleSearchQueries);
 
 	// 5. Stage 3 — Proposal generation
-	let proposalText;
+	let proposal;
 	try {
-		proposalText = await generateProposal(intent, venues);
+		proposal = await generateProposal(intent, venues);
 	} catch (err) {
 		return Response.json({ error: err.message }, { status: 400 });
 	}
@@ -295,8 +291,7 @@ export async function POST(req) {
 			intent,
 			venues: venuesSnapshot,
 			venueIds: venuesSnapshot.map((v) => v.placeId),
-			proposalText,
-			proposal: proposalText,
+			proposal,
 			createdAt: new Date(),
 			updatedAt: new Date(),
 		});
@@ -312,7 +307,7 @@ export async function POST(req) {
 	return Response.json(
 		{
 			proposalId: saved._id.toString(),
-			proposal: proposalText,
+			proposal,
 			intent,
 			venues: venues.map((v) => ({
 				placeId: v.id || v.place_id,

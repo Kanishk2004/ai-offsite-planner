@@ -1,17 +1,9 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
-
-type VenueCandidate = {
-  placeId: string;
-  name: string;
-  address: string;
-  rating?: number;
-  priceLevel?: number;
-  websiteUri?: string;
-};
 
 type CostEstimate = {
   venue: number;
@@ -22,40 +14,46 @@ type CostEstimate = {
   currency: string;
 };
 
-type Proposal = {
-  recommendedVenue?: { placeId: string; name: string; rationale: string } | null;
-  alternativeVenues?: { placeId: string; name: string; reason: string }[];
-  agendaSkeleton?: { day1: string[]; day2: string[] };
-  cateringNotes?: string;
-  logisticsTips?: string[];
-  costEstimate?: CostEstimate;
+type SavedProposalPreview = {
+  proposalId: string;
+  createdAt?: string;
+  status?: string;
+  promptPreview?: string;
+  recommendedVenue?: { placeId?: string; name?: string; rationale?: string } | null;
+  costEstimate?: CostEstimate | null;
 };
 
-type Intent = {
-  headcount?: number | null;
-  budget?: number | null;
-  currency?: string | null;
-  dateRange?: { start: string; end: string } | null;
-  location?: string | null;
-  atmosphere?: string | null;
-};
+const QUICK_TEMPLATES = [
+  {
+    label: 'Team Offsite',
+    prompt:
+      'Plan a 2-day offsite for 60 people with workshops and team bonding. Budget is $50k. Prefer modern spaces with breakout rooms and easy airport access.',
+    destinationHint: 'Austin, TX',
+  },
+  {
+    label: 'Leadership Retreat',
+    prompt:
+      'Create a premium 3-day leadership retreat for 25 executives with strategy sessions, wellness blocks, and private dining. Budget is $80k.',
+    destinationHint: 'Napa Valley, CA',
+  },
+  {
+    label: 'Product Kickoff',
+    prompt:
+      'Suggest a 2-day product kickoff for 90 participants with plenary sessions, demos, and collaborative breakouts. Budget is $70k.',
+    destinationHint: 'Seattle, WA',
+  },
+];
 
-function formatMoney(value: number | null | undefined, currency: string | null | undefined) {
-  if (typeof value !== 'number') return null;
-  try {
-    const cur = currency || 'USD';
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency: cur,
-      maximumFractionDigits: 0,
-    }).format(value);
-  } catch {
-    return `${currency || 'USD'} ${value}`;
-  }
+function formatDateLabel(value: string | undefined) {
+  if (!value) return 'N/A';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'N/A';
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 export default function ProposalCreator() {
   const { user } = useUser();
+  const router = useRouter();
 
   const [prompt, setPrompt] = useState('');
   const [destinationHint, setDestinationHint] = useState('');
@@ -63,18 +61,30 @@ export default function ProposalCreator() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const [proposalId, setProposalId] = useState<string | null>(null);
-  const [proposal, setProposal] = useState<Proposal | null>(null);
-  const [intent, setIntent] = useState<Intent | null>(null);
-  const [venues, setVenues] = useState<VenueCandidate[]>([]);
+  const [recentProposals, setRecentProposals] = useState<SavedProposalPreview[]>([]);
+  const [loadingRecent, setLoadingRecent] = useState(false);
+
+  async function loadRecentProposals() {
+    setLoadingRecent(true);
+    try {
+      const res = await fetch('/api/proposals', { credentials: 'include' });
+      const data = await res.json();
+      if (!res.ok) return;
+      setRecentProposals(Array.isArray(data?.proposals) ? data.proposals : []);
+    } catch {
+      // Keep the panel non-blocking if list fetch fails.
+    } finally {
+      setLoadingRecent(false);
+    }
+  }
+
+  useEffect(() => {
+    loadRecentProposals();
+  }, []);
 
   async function onGenerate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError('');
-    setProposalId(null);
-    setProposal(null);
-    setIntent(null);
-    setVenues([]);
 
     if (!prompt.trim()) {
       setError('Please enter an event description.');
@@ -97,10 +107,11 @@ export default function ProposalCreator() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Failed to generate proposal.');
 
-      setProposalId(data.proposalId);
-      setProposal(data.proposal as Proposal);
-      setIntent(data.intent as Intent);
-      setVenues((data.venues || []) as VenueCandidate[]);
+      const nextProposalId = String(data?.proposalId || '');
+      if (!nextProposalId) throw new Error('Proposal generated but ID was missing.');
+
+      router.push(`/proposals/${nextProposalId}`);
+      router.refresh();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Something went wrong.';
       setError(message);
@@ -109,17 +120,53 @@ export default function ProposalCreator() {
     }
   }
 
-  const recommended = proposal?.recommendedVenue || null;
-  const cost = proposal?.costEstimate || null;
-  const alternatives = proposal?.alternativeVenues || [];
+  const proposalsThisWeek = useMemo(() => {
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    return recentProposals.filter((p) => {
+      if (!p.createdAt) return false;
+      const t = new Date(p.createdAt).getTime();
+      return !Number.isNaN(t) && t >= weekAgo;
+    }).length;
+  }, [recentProposals]);
+
+  const firstName = user?.firstName || user?.fullName?.split(' ')[0] || 'there';
 
   return (
     <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border border-white/10 bg-gradient-to-r from-white/10 via-white/5 to-transparent p-5 md:p-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <div className="text-xs uppercase tracking-[0.18em] text-zinc-400">Dashboard</div>
+            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight mt-1">
+              Welcome back, {firstName}
+            </h1>
+            <p className="text-zinc-300 mt-2 text-sm md:text-base">
+              Build venue proposals faster with guided prompts and live venue discovery.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 text-center md:min-w-[300px]">
+            <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+              <div className="text-lg font-semibold text-white">{recentProposals.length}</div>
+              <div className="text-[11px] text-zinc-400">Saved</div>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+              <div className="text-lg font-semibold text-white">{proposalsThisWeek}</div>
+              <div className="text-[11px] text-zinc-400">This week</div>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+              <div className="text-sm font-semibold text-white">
+                {formatDateLabel(recentProposals[0]?.createdAt)}
+              </div>
+              <div className="text-[11px] text-zinc-400">Last run</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">
-            Create an Offsite Proposal
-          </h1>
+          <h2 className="text-xl md:text-2xl font-semibold tracking-tight">Create an Offsite Proposal</h2>
           <p className="text-zinc-300 mt-1 text-sm md:text-base">
             Describe your event in plain language. We’ll infer intent, discover real venues, and generate a structured plan.
           </p>
@@ -146,6 +193,21 @@ export default function ProposalCreator() {
               className="w-full min-h-28 bg-black/40 border border-white/10 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
               placeholder="Example: Offsite for 60 people, 2 days, budget $50k, modern indoor/outdoor, team building + workshops, rooms for breakouts."
             />
+            <div className="mt-2 flex flex-wrap gap-2">
+              {QUICK_TEMPLATES.map((template) => (
+                <button
+                  key={template.label}
+                  type="button"
+                  onClick={() => {
+                    setPrompt(template.prompt);
+                    setDestinationHint(template.destinationHint);
+                  }}
+                  className="text-xs rounded-full border border-white/15 bg-black/30 px-3 py-1.5 text-zinc-200 hover:bg-white/10 transition-colors"
+                >
+                  {template.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div>
@@ -171,8 +233,12 @@ export default function ProposalCreator() {
             disabled={loading}
             className="w-full py-3 rounded-lg bg-[var(--accent)] text-black font-semibold hover:opacity-95 disabled:opacity-60 transition-opacity"
           >
-            {loading ? 'Generating...' : 'Generate venue proposal'}
+            {loading ? 'Generating and opening proposal...' : 'Generate venue proposal'}
           </button>
+
+          <div className="text-xs text-zinc-400">
+            Uses live venue data and AI recommendations tailored to your event brief.
+          </div>
 
           <div className="md:hidden">
             <Link
@@ -185,78 +251,39 @@ export default function ProposalCreator() {
         </div>
       </form>
 
-      {proposalId && proposal ? (
-        <section className="bg-white/5 border border-white/10 rounded-xl p-5 md:p-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold text-white mb-1">Recommended venue</h2>
-              <div className="text-white font-medium">{recommended?.name || 'TBD'}</div>
-              {recommended?.rationale ? (
-                <p className="text-zinc-300 text-sm mt-2">{recommended.rationale}</p>
-              ) : null}
-            </div>
+      <section className="bg-white/5 border border-white/10 rounded-xl p-5 md:p-6">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-sm font-semibold text-zinc-200">Recent proposals</h3>
+          <Link href="/proposals" className="text-xs text-zinc-300 underline underline-offset-4">
+            View all
+          </Link>
+        </div>
 
-            <div className="text-sm text-right">
-              {cost?.total != null ? (
-                <div className="text-zinc-200">
-                  Estimated total:{' '}
-                  <span className="font-bold text-white">
-                    {formatMoney(cost.total, cost.currency)}
-                  </span>
+        {loadingRecent ? <div className="text-sm text-zinc-400 mt-3">Loading recent proposals...</div> : null}
+
+        {!loadingRecent && recentProposals.length === 0 ? (
+          <div className="mt-3 text-sm text-zinc-400">No saved proposals yet. Generate your first one above.</div>
+        ) : null}
+
+        {!loadingRecent && recentProposals.length > 0 ? (
+          <div className="mt-3 grid gap-2">
+            {recentProposals.slice(0, 3).map((item) => (
+              <Link
+                key={item.proposalId}
+                href={`/proposals/${item.proposalId}`}
+                className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 hover:bg-white/10 transition-colors"
+              >
+                <div className="text-sm text-white font-medium">
+                  {item.recommendedVenue?.name || 'Venue recommendation'}
                 </div>
-              ) : null}
-              <div className="mt-3">
-                <Link
-                  href={`/proposals/${proposalId}`}
-                  className="inline-flex items-center gap-2 text-[var(--accent)] font-semibold hover:opacity-90"
-                >
-                  Open full proposal
-                </Link>
-              </div>
-            </div>
+                <div className="text-xs text-zinc-400 mt-1">
+                  {formatDateLabel(item.createdAt)} • {item.promptPreview || 'No prompt preview'}
+                </div>
+              </Link>
+            ))}
           </div>
-
-          {alternatives.length ? (
-            <div className="mt-6">
-              <h3 className="text-sm font-semibold text-zinc-200 mb-2">Alternative options</h3>
-              <div className="grid gap-3 md:grid-cols-2">
-                {alternatives.slice(0, 4).map((v) => (
-                  <div
-                    key={v.placeId}
-                    className="border border-white/10 rounded-lg p-3 bg-black/20"
-                  >
-                    <div className="font-medium text-white">{v.name}</div>
-                    {v.reason ? (
-                      <div className="text-sm text-zinc-300 mt-1">{v.reason}</div>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {intent ? (
-            <details className="mt-6">
-              <summary className="cursor-pointer text-sm font-medium text-zinc-200">
-                View extracted intent
-              </summary>
-              <pre className="mt-3 bg-black/40 border border-white/10 rounded-lg p-3 overflow-auto text-xs text-zinc-200">
-                {JSON.stringify(intent, null, 2)}
-              </pre>
-            </details>
-          ) : null}
-
-          {Array.isArray(venues) && venues.length ? (
-            <div className="mt-4 text-xs text-zinc-400">
-              Searched {venues.length} venue candidates.
-            </div>
-          ) : null}
-        </section>
-      ) : null}
-
-      {proposalId && !proposal ? (
-        <div className="text-sm text-zinc-300">Proposal generation is in progress.</div>
-      ) : null}
+        ) : null}
+      </section>
     </div>
   );
 }

@@ -1,7 +1,6 @@
 'use client';
 
 import { SignInButton } from '@clerk/nextjs';
-import Link from 'next/link';
 
 function Feature({ title, description }: { title: string; description: string }) {
   return (
@@ -45,12 +44,6 @@ export default function LandingPage() {
                 Get started
               </button>
             </SignInButton>
-            <Link
-              href="/proposals"
-              className="rounded-xl border border-white/10 bg-white/5 px-6 py-3 text-white font-semibold hover:bg-white/10 transition-colors text-center"
-            >
-              View examples
-            </Link>
           </div>
 
           <div className="mt-8 grid gap-3 sm:grid-cols-3">
@@ -118,6 +111,41 @@ export default function LandingPage() {
           </SignInButton>
         </div>
       </section>
+
+      <footer className="rounded-2xl border border-white/10 bg-gradient-to-r from-white/10 via-white/5 to-transparent p-6 md:p-8">
+        <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+          <div>
+            <div className="text-xs uppercase tracking-[0.18em] text-zinc-400">Developer</div>
+            <h3 className="mt-1 text-xl font-semibold text-white">Kanishk Chandna</h3>
+            <a
+              href="mailto:kanishkchandna29@gmail.com"
+              className="mt-2 inline-flex text-sm text-zinc-300 underline underline-offset-4 hover:text-white"
+            >
+              kanishkchandna29@gmail.com
+            </a>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:min-w-[460px]">
+            {[
+              { label: 'LinkedIn', href: 'https://linkedin.com/in/kanishk-chandna' },
+              { label: 'GitHub', href: 'https://github.com/kanishk2004' },
+              { label: 'Twitter', href: 'https://x.com/kanishk_fr' },
+              { label: 'Instagram', href: 'https://instagram.com/kanishk__fr' },
+              { label: 'Blogs', href: 'https://blogs.kanishk.codes' },
+            ].map((item) => (
+              <a
+                key={item.label}
+                href={item.href}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-sm text-zinc-200 hover:bg-white/10 hover:text-white transition-colors"
+              >
+                {item.label}
+              </a>
+            ))}
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

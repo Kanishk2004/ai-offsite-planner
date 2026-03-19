@@ -93,8 +93,8 @@ const proposalSchema = new mongoose.Schema({
 		],
 		default: [],
 	},
-	// Back-compat fields (older versions only stored IDs + `proposalText`)
 	venueIds: { type: [String], default: [] },
+	// Legacy field kept for backward compatibility with older documents.
 	proposalText: { type: Object },
 	proposal: { type: Object },
 	createdAt: { type: Date, default: Date.now },
