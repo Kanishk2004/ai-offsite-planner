@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { SignInButton, useUser } from '@clerk/nextjs';
 
 type RecommendedVenuePreview = {
   placeId: string;
@@ -58,15 +57,11 @@ function formatShortDate(value: string | Date | undefined) {
 }
 
 export default function ProposalsList() {
-  const { isSignedIn } = useUser();
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [proposals, setProposals] = useState<ProposalPreview[]>([]);
 
   useEffect(() => {
-    if (!isSignedIn) return;
-
     let cancelled = false;
     async function load() {
       setLoading(true);
@@ -89,7 +84,7 @@ export default function ProposalsList() {
     return () => {
       cancelled = true;
     };
-  }, [isSignedIn]);
+  }, []);
 
   const cards = useMemo(() => {
     return proposals.map((p) => {
@@ -105,18 +100,6 @@ export default function ProposalsList() {
   const totalCount = cards.length;
   const withBudgetCount = cards.filter((c) => Boolean(c.displayTotal)).length;
   const latestCreatedAt = cards[0]?.createdAt;
-
-  if (!isSignedIn) {
-    return (
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <div className="text-white font-semibold text-lg">Saved proposals</div>
-        <p className="text-zinc-300 text-sm mt-2">Sign in to view your saved venue proposals.</p>
-        <div className="mt-4">
-          <SignInButton fallbackRedirectUrl="/dashboard" />
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col gap-6">

@@ -58,7 +58,8 @@ The app:
 ### Auth and Access Control
 
 - Clerk provider is configured in app layout.
-- `proxy.js` enforces auth for API routes (`/api/*`).
+- `/dashboard`, `/proposals`, and `/proposals/[proposalId]` are server-protected via Clerk `auth()` checks and redirect signed-out users to `/sign-in`.
+- `proxy.js` enforces auth for proposal APIs (`/api/proposals*`).
 - Handlers also perform explicit user checks as defense-in-depth.
 - Proposal documents are scoped by `userId` in all fetches.
 
@@ -183,8 +184,8 @@ app/
 	dashboard/page.tsx
 	proposals/page.jsx
 	proposals/[proposalId]/page.tsx
-	sign-in/page.jsx
-	sign-up/page.jsx
+	sign-in/[[...sign-in]]/page.jsx
+	sign-up/[[...sign-up]]/page.jsx
 	layout.tsx
 	page.tsx
 components/
@@ -200,7 +201,7 @@ next.config.ts
 
 ## Notes for Developers
 
-- API routes require an authenticated Clerk session.
+- Proposal API routes require an authenticated Clerk session.
 - Proposals are user-scoped and cannot be fetched across users.
 - Proposal list endpoint currently returns latest 20 records.
 - Google Places result quality depends on generated query quality and API coverage.

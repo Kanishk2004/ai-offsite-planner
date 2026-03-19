@@ -11,8 +11,6 @@ export default function Page() {
         </p>
         <div className="mt-6">
           <SignIn
-            path="/sign-in"
-            routing="path"
             signUpUrl="/sign-up"
             forceRedirectUrl="/dashboard"
             fallbackRedirectUrl="/dashboard"

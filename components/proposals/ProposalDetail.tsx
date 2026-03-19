@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { SignInButton, useUser } from '@clerk/nextjs';
 
 type ProposalDoc = {
 	proposalId: string;
@@ -133,8 +132,6 @@ function findVenueDetails(
 }
 
 export default function ProposalDetail({ proposalId }: { proposalId: string }) {
-	const { isSignedIn } = useUser();
-
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState('');
 	const [doc, setDoc] = useState<ProposalDoc | null>(null);
@@ -157,10 +154,9 @@ export default function ProposalDetail({ proposalId }: { proposalId: string }) {
 	}
 
 	useEffect(() => {
-		if (!isSignedIn) return;
 		load();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [isSignedIn, proposalId]);
+	}, [proposalId]);
 
 	async function exportPdf() {
 		setError('');
@@ -218,20 +214,6 @@ export default function ProposalDetail({ proposalId }: { proposalId: string }) {
 	// 		return formatVenueValue(value) !== null;
 	// 	},
 	// );
-
-	if (!isSignedIn) {
-		return (
-			<div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-				<div className="text-white font-semibold text-lg">Proposal details</div>
-				<p className="text-zinc-300 text-sm mt-2">
-					Sign in to view your saved proposals.
-				</p>
-				<div className="mt-4">
-					<SignInButton fallbackRedirectUrl="/dashboard" />
-				</div>
-			</div>
-		);
-	}
 
 	return (
 		<div className="flex flex-col gap-6">

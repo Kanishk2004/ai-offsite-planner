@@ -239,13 +239,7 @@ export async function POST(req) {
 	}
 
 	// 2b. Auth (own proposals)
-	let userId;
-	try {
-		const authResult = await auth();
-		userId = authResult?.userId;
-	} catch (err) {
-		console.error('[clerk] auth error:', err);
-	}
+	const { userId } = await auth();
 	if (!userId) {
 		return Response.json({ error: 'Unauthorized' }, { status: 401 });
 	}
