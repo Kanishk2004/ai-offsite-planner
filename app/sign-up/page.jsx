@@ -10,7 +10,13 @@ export default function Page() {
           Sign up to access your company’s AI Event Concierge.
         </p>
         <div className="mt-6">
-          <SignUp />
+          <SignUp
+            path="/sign-up"
+            routing="path"
+            signInUrl="/sign-in"
+            forceRedirectUrl="/dashboard"
+            fallbackRedirectUrl="/dashboard"
+          />
         </div>
       </div>
     </main>

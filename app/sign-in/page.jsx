@@ -10,7 +10,13 @@ export default function Page() {
           Use your corporate account to generate and save offsite venue proposals.
         </p>
         <div className="mt-6">
-          <SignIn path="/sign-in" routing="path" signUpUrl="/sign-up" />
+          <SignIn
+            path="/sign-in"
+            routing="path"
+            signUpUrl="/sign-up"
+            forceRedirectUrl="/dashboard"
+            fallbackRedirectUrl="/dashboard"
+          />
         </div>
       </div>
     </main>
