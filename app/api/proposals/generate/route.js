@@ -27,6 +27,29 @@ import { connectDB, Proposal, VenueCache } from '@/utils/db';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+function normalizePriceLevel(priceLevel) {
+	if (typeof priceLevel === 'number' && Number.isFinite(priceLevel)) {
+		return priceLevel;
+	}
+
+	if (typeof priceLevel !== 'string') return undefined;
+
+	const normalized = priceLevel.trim().toUpperCase();
+	const enumToNumber = {
+		PRICE_LEVEL_FREE: 0,
+		PRICE_LEVEL_INEXPENSIVE: 1,
+		PRICE_LEVEL_MODERATE: 2,
+		PRICE_LEVEL_EXPENSIVE: 3,
+		PRICE_LEVEL_VERY_EXPENSIVE: 4,
+	};
+
+	if (normalized in enumToNumber) {
+		return enumToNumber[normalized];
+	}
+
+	return undefined;
+}
+
 async function extractIntent(prompt, destinationHint) {
 	const response = await openai.chat.completions.create({
 		model: 'gpt-4o',
@@ -153,7 +176,7 @@ async function generateProposal(intent, venues) {
 		name: v.displayName?.text || v.name,
 		address: v.formattedAddress,
 		rating: v.rating,
-		priceLevel: v.priceLevel,
+		priceLevel: normalizePriceLevel(v.priceLevel),
 		websiteUri: v.websiteUri || '',
 	}));
 
@@ -270,7 +293,7 @@ export async function POST(req) {
 			name: v.displayName?.text || v.name || '',
 			address: v.formattedAddress || '',
 			rating: v.rating,
-			priceLevel: v.priceLevel,
+			priceLevel: normalizePriceLevel(v.priceLevel),
 			websiteUri: v.websiteUri || '',
 		}))
 		.filter((v) => Boolean(v.placeId));
@@ -308,7 +331,7 @@ export async function POST(req) {
 				name: v.displayName?.text || v.name,
 				address: v.formattedAddress,
 				rating: v.rating,
-				priceLevel: v.priceLevel,
+				priceLevel: normalizePriceLevel(v.priceLevel),
 				websiteUri: v.websiteUri || '',
 			})),
 		},
